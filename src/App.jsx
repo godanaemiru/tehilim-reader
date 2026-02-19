@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Play, Square, Volume2, BookOpen, AlertCircle, RefreshCw, LayoutGrid, X, Languages } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Square, Volume2, BookOpen, AlertCircle, RefreshCw, LayoutGrid, X, Languages, Search, ExternalLink, BookText } from 'lucide-react';
 
 // --- Utility: Transliteration Generator ---
 const generateTransliteration = (hebrewStr) => {
@@ -50,8 +50,8 @@ const generateTransliteration = (hebrewStr) => {
     .replace(/iy/g, 'i')
     .replace(/uw/g, 'u')
     .replace(/h /g, 'h ')
-    .replace(/^\'+|\'+$/g, '')
-    .replace(/ \'+/g, ' ')
+    .replace(/^'+|'+$/g, '')
+    .replace(/ '+/g, ' ')
     .replace(/-+/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
@@ -76,7 +76,8 @@ const processHebrewText = (htmlText) => {
            const span = document.createElement('span');
            span.textContent = word;
            span.setAttribute('data-word-index', wordIndex++);
-           span.className = "transition-colors duration-150 rounded-md px-1 -mx-1";
+           // Added cursor-pointer and hover effects so users know it's clickable
+           span.className = "transition-all duration-150 rounded-md px-1 -mx-1 cursor-pointer hover:bg-stone-100 hover:text-blue-600 active:bg-blue-100";
            fragment.appendChild(span);
            ttsWordsArray.push(word);
          } else {
@@ -112,6 +113,16 @@ export default function App() {
   const [playingVerseNum, setPlayingVerseNum] = useState(null);
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(null);
   const highlightIntervalRef = useRef(null);
+
+  // Word Dictionary Modal State
+  const [wordModal, setWordModal] = useState({
+    show: false,
+    originalWord: "",
+    cleanWord: "",
+    data: [],
+    loading: false,
+    error: null
+  });
 
   useEffect(() => {
     fetchPsalm(chapter);
@@ -178,6 +189,32 @@ export default function App() {
       setError("Could not load the Psalm. Please check your internet connection.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch Dictionary Data for Clicked Word
+  const handleWordClick = async (rawWord) => {
+    // Strip cantillation (te'amim) so Sefaria lexicon can match the root word, but keep vowels
+    const cleanWord = rawWord.replace(/[\u0591-\u05AF\u05C3]/g, '').trim();
+    
+    setWordModal({
+      show: true,
+      originalWord: rawWord,
+      cleanWord: cleanWord,
+      data: [],
+      loading: true,
+      error: null
+    });
+
+    try {
+      const response = await fetch(`https://www.sefaria.org/api/words/${encodeURIComponent(cleanWord)}`);
+      if (!response.ok) throw new Error("Dictionary lookup failed.");
+      
+      const data = await response.json();
+      setWordModal(prev => ({ ...prev, loading: false, data: Array.isArray(data) ? data : [] }));
+    } catch (err) {
+      console.error(err);
+      setWordModal(prev => ({ ...prev, loading: false, error: "Could not fetch dictionary definition." }));
     }
   };
 
@@ -263,7 +300,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24 selection:bg-blue-100 relative">
-      <header className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-stone-200 z-40 shadow-sm">
+      <header className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-stone-200 z-30 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
@@ -349,8 +386,6 @@ export default function App() {
       {showChapterModal && (
         <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-5 md:p-6 border-b border-stone-100 bg-white z-10">
               <div>
                 <h2 className="text-xl md:text-2xl font-bold text-stone-800 tracking-tight">Select Psalm</h2>
@@ -363,8 +398,6 @@ export default function App() {
                 <X size={24} />
               </button>
             </div>
-
-            {/* Modal Grid */}
             <div className="overflow-y-auto p-5 md:p-6 flex-1 bg-stone-50/50">
               <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 sm:gap-3">
                 {Array.from({ length: 150 }, (_, i) => i + 1).map(c => (
@@ -385,7 +418,105 @@ export default function App() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Word Dictionary Modal */}
+      {wordModal.show && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             
+            <div className="flex justify-between items-start p-6 border-b border-stone-100 bg-white">
+              <div>
+                <div className="flex items-center gap-2 text-stone-500 mb-1">
+                  <BookText size={16} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Word Study</span>
+                </div>
+                <h2 className="text-4xl font-serif text-stone-900 mt-2" dir="rtl">{wordModal.cleanWord}</h2>
+              </div>
+              <button 
+                onClick={() => setWordModal({ ...wordModal, show: false })}
+                className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-full transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-6 flex-1 bg-stone-50">
+              {wordModal.loading && (
+                <div className="space-y-4 animate-pulse">
+                  <div className="h-4 bg-stone-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-stone-200 rounded w-1/2"></div>
+                  <div className="h-4 bg-stone-200 rounded w-5/6"></div>
+                </div>
+              )}
+
+              {wordModal.error && !wordModal.loading && (
+                <div className="text-stone-500 text-center py-4">
+                  <p>{wordModal.error}</p>
+                </div>
+              )}
+
+              {!wordModal.loading && !wordModal.error && wordModal.data.length === 0 && (
+                <div className="text-stone-500 text-center py-4">
+                  <p>No exact dictionary definition found for this prefix/suffix combination.</p>
+                  <p className="mt-2 text-sm">Click below to search its usage across the Tanakh.</p>
+                </div>
+              )}
+
+              {!wordModal.loading && wordModal.data.length > 0 && (
+                <div className="space-y-6">
+                  {wordModal.data.map((entry, idx) => {
+                    // Extract definitions safely based on Sefaria's Lexicon API structures
+                    let definition = "Definition available on Sefaria.";
+                    if (entry.content && entry.content.senses && entry.content.senses.length > 0) {
+                      definition = entry.content.senses[0].definition || entry.content.senses[0].meaning;
+                    } else if (entry.headword) {
+                      definition = "Related to root: " + entry.headword;
+                    }
+
+                    // Clean out Sefaria's HTML tags for strong/em if they exist
+                    if(definition && typeof definition === 'string') {
+                        definition = definition.replace(/<[^>]*>?/gm, '');
+                    }
+
+                    return (
+                      <div key={idx} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                        <div className="flex justify-between items-baseline mb-2">
+                          <span className="font-bold text-stone-800 font-serif text-xl" dir="rtl">{entry.headword}</span>
+                          <span className="text-xs font-semibold px-2 py-1 bg-blue-50 text-blue-700 rounded-lg">
+                            {entry.lexicon}
+                          </span>
+                        </div>
+                        {entry.morphology && entry.morphology.partOfSpeech && (
+                          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">
+                            {entry.morphology.partOfSpeech}
+                          </div>
+                        )}
+                        <p className="text-stone-700 text-sm leading-relaxed">
+                          {definition}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-white border-t border-stone-100">
+              <a 
+                href={`https://www.sefaria.org/search?q=${encodeURIComponent(wordModal.cleanWord)}&tab=text&textSort=relevance&tvar=1&tsort=relevance&svar=1&ssort=relevance`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold transition-colors"
+              >
+                <Search size={18} />
+                <span>Search in Tanakh</span>
+                <ExternalLink size={16} className="ml-1 opacity-70" />
+              </a>
+            </div>
+
           </div>
         </div>
       )}
@@ -436,6 +567,7 @@ export default function App() {
                 playVerse={playVerse}
                 stopVerseAudio={stopVerseAudio}
                 showTranslit={showTranslit}
+                onWordClick={handleWordClick}
               />
             ))}
           </div>
@@ -445,7 +577,7 @@ export default function App() {
   );
 }
 
-function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVerseAudio, showTranslit }) {
+function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVerseAudio, showTranslit, onWordClick }) {
   const isPlayingThisVerse = playingVerseNum === v.num;
   const containerRef = useRef(null);
 
@@ -464,6 +596,13 @@ function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVe
       }
     }
   }, [highlightedWordIndex, isPlayingThisVerse]);
+
+  // Handle clicking on individual words mapped in the HTML
+  const handleTextClick = (e) => {
+    if (e.target.tagName === 'SPAN' && e.target.hasAttribute('data-word-index')) {
+      onWordClick(e.target.textContent);
+    }
+  };
 
   return (
     <div className={`bg-white p-6 md:p-8 rounded-3xl shadow-sm border transition duration-300 ${
@@ -492,6 +631,7 @@ function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVe
       
       <div 
         ref={containerRef}
+        onClick={handleTextClick}
         className="text-4xl md:text-5xl text-right font-serif mb-8 text-stone-900 break-words leading-loose" 
         style={{ lineHeight: '1.9' }}
         dir="rtl"
