@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Play, Square, Volume2, BookOpen, AlertCircle, RefreshCw, LayoutGrid, X, Languages, Search, ExternalLink, BookText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Square, Volume2, BookOpen, AlertCircle, RefreshCw, LayoutGrid, X, Languages, Search, ExternalLink, BookText, Moon, Sun } from 'lucide-react';
 
 // --- Utility: Transliteration Generator ---
 const generateTransliteration = (hebrewStr) => {
-  // Strip cantillation marks (te'amim) and Sof Pasuq
   let cleanStr = hebrewStr.replace(/[\u0591-\u05AF\u05C3]/g, '');
-  // Replace maqaf with hyphen
   cleanStr = cleanStr.replace(/\u05BE/g, '-');
 
   const charMap = {
@@ -45,12 +43,11 @@ const generateTransliteration = (hebrewStr) => {
     }
   }
 
-  // Formatting cleanup for nicer readability
   return result
     .replace(/iy/g, 'i')
     .replace(/uw/g, 'u')
     .replace(/h /g, 'h ')
-    .replace(/^'+|'+$/g, '')
+    .replace(/^'+'|'+'$/g, '')
     .replace(/ '+/g, ' ')
     .replace(/-+/g, '-')
     .replace(/\s+/g, ' ')
@@ -66,7 +63,7 @@ const processHebrewText = (htmlText) => {
   const ttsWordsArray = [];
   
   const walk = (node) => {
-    if (node.nodeType === 3) { // Text node
+    if (node.nodeType === 3) { 
       const text = node.nodeValue;
       const words = text.split(/(\s+)/);
       const fragment = document.createDocumentFragment();
@@ -76,8 +73,8 @@ const processHebrewText = (htmlText) => {
            const span = document.createElement('span');
            span.textContent = word;
            span.setAttribute('data-word-index', wordIndex++);
-           // Added cursor-pointer and hover effects so users know it's clickable
-           span.className = "transition-all duration-150 rounded-md px-1 -mx-1 cursor-pointer hover:bg-stone-100 hover:text-blue-600 active:bg-blue-100";
+           // Simplified class. Hover and Active states are now managed via dynamic CSS injection below
+           span.className = "hebrew-word";
            fragment.appendChild(span);
            ttsWordsArray.push(word);
          } else {
@@ -107,6 +104,14 @@ export default function App() {
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [showTranslit, setShowTranslit] = useState(false);
   
+  // Theme State (Persists to localStorage)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('tehillim-dark-mode') === 'true';
+    }
+    return false;
+  });
+
   // Audio state
   const audioRef = useRef(null);
   const [isPlayingChapter, setIsPlayingChapter] = useState(false);
@@ -123,6 +128,11 @@ export default function App() {
     loading: false,
     error: null
   });
+
+  // Save theme preference
+  useEffect(() => {
+    localStorage.setItem('tehillim-dark-mode', isDarkMode);
+  }, [isDarkMode]);
 
   useEffect(() => {
     fetchPsalm(chapter);
@@ -154,7 +164,6 @@ export default function App() {
     };
   }, [verses]);
 
-  // Clean up the highlight timer if the component unmounts
   useEffect(() => {
     return () => clearInterval(highlightIntervalRef.current);
   }, []);
@@ -192,9 +201,7 @@ export default function App() {
     }
   };
 
-  // Fetch Dictionary Data for Clicked Word
   const handleWordClick = async (rawWord) => {
-    // Strip cantillation (te'amim) so Sefaria lexicon can match the root word, but keep vowels
     const cleanWord = rawWord.replace(/[\u0591-\u05AF\u05C3]/g, '').trim();
     
     setWordModal({
@@ -225,14 +232,12 @@ export default function App() {
 
   const playVerse = (ttsText, verseNum) => {
     if (!('speechSynthesis' in window)) {
-      alert("Text-to-speech is not supported in your browser. Please try Chrome or Safari.");
+      alert("Text-to-speech is not supported in your browser.");
       return;
     }
 
     try {
-      if (audioRef.current && isPlayingChapter) {
-        audioRef.current.pause();
-      }
+      if (audioRef.current && isPlayingChapter) audioRef.current.pause();
       window.speechSynthesis.cancel();
       clearInterval(highlightIntervalRef.current);
       
@@ -247,7 +252,6 @@ export default function App() {
         setHighlightedWordIndex(0);
         
         let currentWord = 0;
-        // Move the highlight independently of the audio at a fixed speed (350ms per word)
         highlightIntervalRef.current = setInterval(() => {
           currentWord++;
           if (currentWord >= totalWords) {
@@ -281,9 +285,7 @@ export default function App() {
 
   const stopVerseAudio = () => {
     clearInterval(highlightIntervalRef.current);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setPlayingVerseNum(null);
     setHighlightedWordIndex(null);
   };
@@ -299,305 +301,343 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24 selection:bg-blue-100 relative">
-      <header className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-stone-200 z-30 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                <BookOpen size={24} />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-stone-800 tracking-tight">Tehillim Reader</h1>
-                <p className="text-sm text-stone-500 font-medium">{hebrewTitle || `Psalm ${chapter}`}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 bg-stone-100 p-1.5 rounded-2xl">
-              <button 
-                disabled={chapter <= 1 || loading} 
-                onClick={() => setChapter(c => c - 1)}
-                className="p-2 hover:bg-white hover:shadow-sm rounded-xl disabled:opacity-40 transition-all"
-                title="Previous Psalm"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              
-              <button 
-                onClick={() => setShowChapterModal(true)}
-                disabled={loading}
-                className="flex items-center gap-2 bg-transparent hover:bg-white hover:shadow-sm px-4 py-2 font-bold text-stone-700 rounded-xl transition-all min-w-[120px] justify-center disabled:opacity-40"
-              >
-                <LayoutGrid size={18} className="text-stone-400" />
-                <span>Psalm {chapter}</span>
-              </button>
-              
-              <button 
-                disabled={chapter >= 150 || loading} 
-                onClick={() => setChapter(c => c + 1)}
-                className="p-2 hover:bg-white hover:shadow-sm rounded-xl disabled:opacity-40 transition-all"
-                title="Next Psalm"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          </div>
+    <div 
+      className={`min-h-screen font-sans pb-24 relative overflow-hidden transition-colors duration-500 ${isDarkMode ? 'theme-dark text-slate-200 selection:bg-blue-900/50' : 'theme-light text-stone-900 selection:bg-blue-100'}`}
+      style={{
+        backgroundColor: isDarkMode ? '#0f172a' : '#f4ebd8', // Deep slate vs Papyrus
+        backgroundImage: 'url("https://www.transparenttextures.com/patterns/aged-paper.png")',
+        colorScheme: isDarkMode ? 'dark' : 'light'
+      }}
+    >
+      {/* Dynamic CSS for Hebrew Word highlighting so it respects dark mode accurately */}
+      <style>{`
+        .hebrew-word { transition: all 150ms; border-radius: 0.375rem; padding: 0 0.25rem; margin: 0 -0.25rem; cursor: pointer; }
+        .theme-light .hebrew-word:hover { background-color: #f5f5f4; color: #2563eb; }
+        .theme-light .hebrew-word.active-word { background-color: #bfdbfe; color: #1e3a8a; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
+        
+        .theme-dark .hebrew-word:hover { background-color: #334155; color: #60a5fa; }
+        .theme-dark .hebrew-word.active-word { background-color: #2563eb; color: #ffffff; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
+      `}</style>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between bg-stone-100/80 p-3 rounded-2xl border border-stone-200 gap-4">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button 
-                onClick={toggleChapterAudio}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all flex-1 sm:flex-none justify-center ${
-                  isPlayingChapter 
-                    ? "bg-stone-800 text-white hover:bg-stone-700" 
-                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-600/20"
-                }`}
-              >
-                 {isPlayingChapter ? <Square fill="currentColor" size={18} /> : <Play fill="currentColor" size={18} />}
-                 {isPlayingChapter ? "Pause Chapter" : "Listen to Chapter"}
-              </button>
-              
-              <button 
-                onClick={() => setShowTranslit(!showTranslit)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all ${
-                  showTranslit ? 'bg-blue-100 text-blue-700 border border-transparent' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
-                }`}
-                title="Toggle Phonetic Transliteration"
-              >
-                <Languages size={18} />
-                <span className="hidden md:inline">Phonetics</span>
-              </button>
-            </div>
-            
-            <div className="flex-1 w-full max-w-sm flex items-center justify-end">
-               <audio 
-                 ref={audioRef} 
-                 src={getChapterAudioUrl(chapter)} 
-                 controls 
-                 controlsList="nodownload"
-                 className="h-10 w-full"
-               />
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Ancient Papyrus Hebrew Watermark Overlay */}
+      <div 
+        className={`fixed inset-0 z-0 pointer-events-none text-[6rem] md:text-[8rem] font-serif leading-none overflow-hidden select-none flex flex-wrap content-start transition-opacity duration-500 ${isDarkMode ? 'text-slate-500 opacity-[0.03]' : 'text-amber-900 opacity-[0.04]'}`} 
+        dir="rtl"
+        style={{ transform: 'rotate(-2deg) scale(1.1)' }}
+      >
+        {"תהילים לדוד יהוה רעי לא אחסר בנאות דשא ירביצני על מי מנוחות ינהלני נפשי ישובב ינחני במעגלי צדק למען שמו גם כי אלך בגיא צלמות לא אירא רע כי אתה עמדי שבטך ומשענתך המה ינחמני תערוך לפני שלחן נגד צררי דשנת בשמן ראשי כוסי רויה ".repeat(30)}
+      </div>
 
-      {/* Chapter Selection Modal */}
-      {showChapterModal && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-5 md:p-6 border-b border-stone-100 bg-white z-10">
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold text-stone-800 tracking-tight">Select Psalm</h2>
-                <p className="text-sm text-stone-500 font-medium mt-1">Jump to any of the 150 chapters</p>
+      <div className="relative z-10">
+        <header className={`sticky top-0 backdrop-blur-md border-b z-30 shadow-sm transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-stone-200'}`}>
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            
+            {/* Top Navigation Row */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl transition-colors ${isDarkMode ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                  <BookOpen size={24} />
+                </div>
+                <div>
+                  <h1 className={`text-xl font-bold tracking-tight transition-colors ${isDarkMode ? 'text-slate-100' : 'text-stone-800'}`}>Tehillim Reader</h1>
+                  <p className={`text-sm font-medium transition-colors ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>{hebrewTitle || `Psalm ${chapter}`}</p>
+                </div>
               </div>
-              <button 
-                onClick={() => setShowChapterModal(false)}
-                className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-full transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div className="overflow-y-auto p-5 md:p-6 flex-1 bg-stone-50/50">
-              <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 sm:gap-3">
-                {Array.from({ length: 150 }, (_, i) => i + 1).map(c => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      setChapter(c);
-                      setShowChapterModal(false);
-                    }}
-                    className={`aspect-square sm:aspect-auto sm:py-3 rounded-2xl font-bold text-center transition-all flex items-center justify-center text-lg ${
-                      chapter === c
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-600 ring-offset-2 ring-offset-stone-50'
-                        : 'bg-white text-stone-700 hover:bg-blue-50 hover:text-blue-700 border border-stone-200 hover:border-blue-200 hover:shadow-sm'
-                    }`}
+              
+              <div className="flex items-center gap-3">
+                {/* Theme Toggle Button */}
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className={`p-2.5 rounded-full transition-all ${isDarkMode ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
+                  title="Toggle Night Mode"
+                >
+                  {isDarkMode ? <Moon size={18} className="fill-current" /> : <Sun size={18} className="fill-current" />}
+                </button>
+
+                <div className={`flex items-center gap-1 p-1.5 rounded-2xl transition-colors ${isDarkMode ? 'bg-slate-800' : 'bg-stone-100'}`}>
+                  <button 
+                    disabled={chapter <= 1 || loading} 
+                    onClick={() => setChapter(c => c - 1)}
+                    className={`p-2 rounded-xl disabled:opacity-40 transition-all ${isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-white text-stone-700'}`}
                   >
-                    {c}
+                    <ChevronLeft size={20} />
                   </button>
-                ))}
+                  
+                  <button 
+                    onClick={() => setShowChapterModal(true)}
+                    disabled={loading}
+                    className={`flex items-center gap-2 px-4 py-2 font-bold rounded-xl transition-all min-w-[120px] justify-center disabled:opacity-40 ${isDarkMode ? 'text-slate-200 hover:bg-slate-700' : 'text-stone-700 hover:bg-white bg-transparent'}`}
+                  >
+                    <LayoutGrid size={18} className={isDarkMode ? 'text-slate-400' : 'text-stone-400'} />
+                    <span>Psalm {chapter}</span>
+                  </button>
+                  
+                  <button 
+                    disabled={chapter >= 150 || loading} 
+                    onClick={() => setChapter(c => c + 1)}
+                    className={`p-2 rounded-xl disabled:opacity-40 transition-all ${isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-white text-stone-700'}`}
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Audio Controls Row */}
+            <div className={`flex flex-col sm:flex-row items-center justify-between p-3 rounded-2xl border gap-4 transition-colors duration-300 ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-stone-100/80 border-stone-200'}`}>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button 
+                  onClick={toggleChapterAudio}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all flex-1 sm:flex-none justify-center ${
+                    isPlayingChapter 
+                      ? (isDarkMode ? "bg-slate-700 text-white hover:bg-slate-600" : "bg-stone-800 text-white hover:bg-stone-700") 
+                      : (isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/30" : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-600/20")
+                  }`}
+                >
+                   {isPlayingChapter ? <Square fill="currentColor" size={18} /> : <Play fill="currentColor" size={18} />}
+                   {isPlayingChapter ? "Pause Chapter" : "Listen to Chapter"}
+                </button>
+                
+                <button 
+                  onClick={() => setShowTranslit(!showTranslit)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all border ${
+                    showTranslit 
+                      ? (isDarkMode ? 'bg-blue-900/60 text-blue-300 border-transparent' : 'bg-blue-100 text-blue-700 border-transparent') 
+                      : (isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700' : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50')
+                  }`}
+                >
+                  <Languages size={18} />
+                  <span className="hidden md:inline">Phonetics</span>
+                </button>
+              </div>
+              
+              <div className="flex-1 w-full max-w-sm flex items-center justify-end">
+                 <audio 
+                   ref={audioRef} 
+                   src={getChapterAudioUrl(chapter)} 
+                   controls 
+                   controlsList="nodownload"
+                   className={`h-10 w-full rounded-full overflow-hidden ${isDarkMode ? 'opacity-90' : ''}`}
+                 />
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* Word Dictionary Modal */}
-      {wordModal.show && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            <div className="flex justify-between items-start p-6 border-b border-stone-100 bg-white">
-              <div>
-                <div className="flex items-center gap-2 text-stone-500 mb-1">
-                  <BookText size={16} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Word Study</span>
+        {/* Chapter Selection Modal */}
+        {showChapterModal && (
+          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/80' : 'bg-stone-900/40'}`}>
+            <div className={`rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+              <div className={`flex justify-between items-center p-5 md:p-6 border-b z-10 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-stone-100 bg-white'}`}>
+                <div>
+                  <h2 className={`text-xl md:text-2xl font-bold tracking-tight ${isDarkMode ? 'text-slate-100' : 'text-stone-800'}`}>Select Psalm</h2>
+                  <p className={`text-sm font-medium mt-1 ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>Jump to any of the 150 chapters</p>
                 </div>
-                <h2 className="text-4xl font-serif text-stone-900 mt-2" dir="rtl">{wordModal.cleanWord}</h2>
+                <button 
+                  onClick={() => setShowChapterModal(false)}
+                  className={`p-2 rounded-full transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'}`}
+                >
+                  <X size={24} />
+                </button>
               </div>
+              <div className={`overflow-y-auto p-5 md:p-6 flex-1 ${isDarkMode ? 'bg-slate-900/50' : 'bg-stone-50/50'}`}>
+                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 sm:gap-3">
+                  {Array.from({ length: 150 }, (_, i) => i + 1).map(c => (
+                    <button
+                      key={c}
+                      onClick={() => {
+                        setChapter(c);
+                        setShowChapterModal(false);
+                      }}
+                      className={`aspect-square sm:aspect-auto sm:py-3 rounded-2xl font-bold text-center transition-all flex items-center justify-center text-lg border ${
+                        chapter === c
+                          ? `bg-blue-600 text-white shadow-lg border-blue-600 ${isDarkMode ? 'shadow-blue-900/40 ring-2 ring-blue-600 ring-offset-2 ring-offset-slate-900' : 'shadow-blue-600/30 ring-2 ring-blue-600 ring-offset-2 ring-offset-stone-50'}`
+                          : (isDarkMode 
+                              ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-blue-400 hover:border-slate-600' 
+                              : 'bg-white text-stone-700 hover:bg-blue-50 hover:text-blue-700 border-stone-200 hover:border-blue-200 hover:shadow-sm')
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Word Dictionary Modal */}
+        {wordModal.show && (
+          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/80' : 'bg-stone-900/40'}`}>
+            <div className={`rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+              
+              <div className={`flex justify-between items-start p-6 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-stone-100 bg-white'}`}>
+                <div>
+                  <div className={`flex items-center gap-2 mb-1 ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                    <BookText size={16} />
+                    <span className="text-xs font-bold uppercase tracking-wider">Word Study</span>
+                  </div>
+                  <h2 className={`text-4xl font-serif mt-2 ${isDarkMode ? 'text-slate-100' : 'text-stone-900'}`} dir="rtl">{wordModal.cleanWord}</h2>
+                </div>
+                <button 
+                  onClick={() => setWordModal({ ...wordModal, show: false })}
+                  className={`p-2 rounded-full transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'}`}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className={`overflow-y-auto p-6 flex-1 ${isDarkMode ? 'bg-slate-900/50' : 'bg-stone-50'}`}>
+                {wordModal.loading && (
+                  <div className="space-y-4 animate-pulse">
+                    <div className={`h-4 rounded w-3/4 ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                    <div className={`h-4 rounded w-1/2 ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                    <div className={`h-4 rounded w-5/6 ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                  </div>
+                )}
+
+                {wordModal.error && !wordModal.loading && (
+                  <div className={`text-center py-4 ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                    <p>{wordModal.error}</p>
+                  </div>
+                )}
+
+                {!wordModal.loading && !wordModal.error && wordModal.data.length === 0 && (
+                  <div className={`text-center py-4 ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                    <p>No exact dictionary definition found for this prefix/suffix combination.</p>
+                    <p className="mt-2 text-sm">Click below to search its usage across the Tanakh.</p>
+                  </div>
+                )}
+
+                {!wordModal.loading && wordModal.data.length > 0 && (
+                  <div className="space-y-6">
+                    {wordModal.data.map((entry, idx) => {
+                      let definition = "Definition available on Sefaria.";
+                      if (entry.content && entry.content.senses && entry.content.senses.length > 0) {
+                        definition = entry.content.senses[0].definition || entry.content.senses[0].meaning;
+                      } else if (entry.headword) {
+                        definition = "Related to root: " + entry.headword;
+                      }
+
+                      if(definition && typeof definition === 'string') {
+                          definition = definition.replace(/<[^>]*>?/gm, '');
+                      }
+
+                      return (
+                        <div key={idx} className={`p-4 rounded-2xl border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-stone-200'}`}>
+                          <div className="flex justify-between items-baseline mb-2">
+                            <span className={`font-bold font-serif text-xl ${isDarkMode ? 'text-slate-100' : 'text-stone-800'}`} dir="rtl">{entry.headword}</span>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
+                              {entry.lexicon}
+                            </span>
+                          </div>
+                          {entry.morphology && entry.morphology.partOfSpeech && (
+                            <div className={`text-xs font-medium uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>
+                              {entry.morphology.partOfSpeech}
+                            </div>
+                          )}
+                          <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-stone-700'}`}>
+                            {definition}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              
+              <div className={`p-4 border-t ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-stone-100'}`}>
+                <a 
+                  href={`https://www.sefaria.org/search?q=${encodeURIComponent(wordModal.cleanWord)}&tab=text&textSort=relevance&tvar=1&tsort=relevance&svar=1&ssort=relevance`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-center justify-center gap-2 w-full py-3 text-white rounded-xl font-bold transition-colors ${isDarkMode ? 'bg-slate-900 hover:bg-slate-950' : 'bg-stone-900 hover:bg-stone-800'}`}
+                >
+                  <Search size={18} />
+                  <span>Search in Tanakh</span>
+                  <ExternalLink size={16} className="ml-1 opacity-70" />
+                </a>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        <main className="max-w-4xl mx-auto px-4 py-8">
+          {loading && (
+            <div className="space-y-6 animate-pulse">
+              {[1, 2, 3].map(i => (
+                <div key={i} className={`backdrop-blur-sm p-6 md:p-8 rounded-3xl shadow-sm border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-stone-200'}`}>
+                  <div className="flex justify-between items-start mb-6">
+                    <div className={`h-6 w-20 rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                    <div className={`h-10 w-10 rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                  </div>
+                  <div className="space-y-4 mb-8">
+                    <div className={`h-10 rounded-lg w-full ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                    <div className={`h-10 rounded-lg w-5/6 ml-auto ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className={`h-4 rounded w-full ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                    <div className={`h-4 rounded w-4/5 ${isDarkMode ? 'bg-slate-700' : 'bg-stone-200'}`}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className={`p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-4 border ${isDarkMode ? 'bg-red-900/20 border-red-900/50 text-red-400' : 'bg-red-50 border-red-200 text-red-700'}`}>
+              <AlertCircle size={48} className="text-red-400" />
+              <p className="text-lg font-medium">{error}</p>
               <button 
-                onClick={() => setWordModal({ ...wordModal, show: false })}
-                className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-full transition-colors"
+                onClick={() => fetchPsalm(chapter)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full font-semibold border transition ${isDarkMode ? 'bg-slate-800 text-red-400 border-red-900 hover:bg-slate-700' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}
               >
-                <X size={24} />
+                <RefreshCw size={16} /> Try Again
               </button>
             </div>
+          )}
 
-            <div className="overflow-y-auto p-6 flex-1 bg-stone-50">
-              {wordModal.loading && (
-                <div className="space-y-4 animate-pulse">
-                  <div className="h-4 bg-stone-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-stone-200 rounded w-1/2"></div>
-                  <div className="h-4 bg-stone-200 rounded w-5/6"></div>
-                </div>
-              )}
-
-              {wordModal.error && !wordModal.loading && (
-                <div className="text-stone-500 text-center py-4">
-                  <p>{wordModal.error}</p>
-                </div>
-              )}
-
-              {!wordModal.loading && !wordModal.error && wordModal.data.length === 0 && (
-                <div className="text-stone-500 text-center py-4">
-                  <p>No exact dictionary definition found for this prefix/suffix combination.</p>
-                  <p className="mt-2 text-sm">Click below to search its usage across the Tanakh.</p>
-                </div>
-              )}
-
-              {!wordModal.loading && wordModal.data.length > 0 && (
-                <div className="space-y-6">
-                  {wordModal.data.map((entry, idx) => {
-                    // Extract definitions safely based on Sefaria's Lexicon API structures
-                    let definition = "Definition available on Sefaria.";
-                    if (entry.content && entry.content.senses && entry.content.senses.length > 0) {
-                      definition = entry.content.senses[0].definition || entry.content.senses[0].meaning;
-                    } else if (entry.headword) {
-                      definition = "Related to root: " + entry.headword;
-                    }
-
-                    // Clean out Sefaria's HTML tags for strong/em if they exist
-                    if(definition && typeof definition === 'string') {
-                        definition = definition.replace(/<[^>]*>?/gm, '');
-                    }
-
-                    return (
-                      <div key={idx} className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-                        <div className="flex justify-between items-baseline mb-2">
-                          <span className="font-bold text-stone-800 font-serif text-xl" dir="rtl">{entry.headword}</span>
-                          <span className="text-xs font-semibold px-2 py-1 bg-blue-50 text-blue-700 rounded-lg">
-                            {entry.lexicon}
-                          </span>
-                        </div>
-                        {entry.morphology && entry.morphology.partOfSpeech && (
-                          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">
-                            {entry.morphology.partOfSpeech}
-                          </div>
-                        )}
-                        <p className="text-stone-700 text-sm leading-relaxed">
-                          {definition}
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+          {!loading && !error && (
+            <div className="space-y-6">
+              {verses.map((v) => (
+                <VerseItem 
+                  key={v.num}
+                  v={v}
+                  playingVerseNum={playingVerseNum}
+                  highlightedWordIndex={highlightedWordIndex}
+                  playVerse={playVerse}
+                  stopVerseAudio={stopVerseAudio}
+                  showTranslit={showTranslit}
+                  onWordClick={handleWordClick}
+                  isDarkMode={isDarkMode}
+                />
+              ))}
             </div>
-            
-            <div className="p-4 bg-white border-t border-stone-100">
-              <a 
-                href={`https://www.sefaria.org/search?q=${encodeURIComponent(wordModal.cleanWord)}&tab=text&textSort=relevance&tvar=1&tsort=relevance&svar=1&ssort=relevance`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold transition-colors"
-              >
-                <Search size={18} />
-                <span>Search in Tanakh</span>
-                <ExternalLink size={16} className="ml-1 opacity-70" />
-              </a>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {loading && (
-          <div className="space-y-6 animate-pulse">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-stone-100">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="h-6 w-20 bg-stone-200 rounded-full"></div>
-                  <div className="h-10 w-10 bg-stone-200 rounded-full"></div>
-                </div>
-                <div className="space-y-4 mb-8">
-                  <div className="h-10 bg-stone-200 rounded-lg w-full"></div>
-                  <div className="h-10 bg-stone-200 rounded-lg w-5/6 ml-auto"></div>
-                </div>
-                <div className="space-y-3">
-                  <div className="h-4 bg-stone-100 rounded w-full"></div>
-                  <div className="h-4 bg-stone-100 rounded w-4/5"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {error && !loading && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-4">
-            <AlertCircle size={48} className="text-red-400" />
-            <p className="text-lg font-medium">{error}</p>
-            <button 
-              onClick={() => fetchPsalm(chapter)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 rounded-full font-semibold border border-red-200 hover:bg-red-50 transition"
-            >
-              <RefreshCw size={16} /> Try Again
-            </button>
-          </div>
-        )}
-
-        {!loading && !error && (
-          <div className="space-y-6">
-            {verses.map((v) => (
-              <VerseItem 
-                key={v.num}
-                v={v}
-                playingVerseNum={playingVerseNum}
-                highlightedWordIndex={highlightedWordIndex}
-                playVerse={playVerse}
-                stopVerseAudio={stopVerseAudio}
-                showTranslit={showTranslit}
-                onWordClick={handleWordClick}
-              />
-            ))}
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
-function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVerseAudio, showTranslit, onWordClick }) {
+function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVerseAudio, showTranslit, onWordClick, isDarkMode }) {
   const isPlayingThisVerse = playingVerseNum === v.num;
   const containerRef = useRef(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
     
-    const activeSpans = containerRef.current.querySelectorAll('.bg-blue-200');
-    activeSpans.forEach(el => {
-      el.classList.remove('bg-blue-200', 'text-blue-900', 'shadow-sm');
-    });
+    // Manage dynamic highlight class instead of hardcoded tailwind classes
+    const activeSpans = containerRef.current.querySelectorAll('.active-word');
+    activeSpans.forEach(el => el.classList.remove('active-word'));
     
     if (isPlayingThisVerse && highlightedWordIndex !== null) {
       const targetSpan = containerRef.current.querySelector(`span[data-word-index="${highlightedWordIndex}"]`);
-      if (targetSpan) {
-        targetSpan.classList.add('bg-blue-200', 'text-blue-900', 'shadow-sm');
-      }
+      if (targetSpan) targetSpan.classList.add('active-word');
     }
   }, [highlightedWordIndex, isPlayingThisVerse]);
 
-  // Handle clicking on individual words mapped in the HTML
   const handleTextClick = (e) => {
     if (e.target.tagName === 'SPAN' && e.target.hasAttribute('data-word-index')) {
       onWordClick(e.target.textContent);
@@ -605,11 +645,13 @@ function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVe
   };
 
   return (
-    <div className={`bg-white p-6 md:p-8 rounded-3xl shadow-sm border transition duration-300 ${
-      isPlayingThisVerse ? "border-blue-300 shadow-blue-100/50 bg-blue-50/10" : "border-stone-100 hover:shadow-md"
+    <div className={`backdrop-blur-sm p-6 md:p-8 rounded-3xl shadow-sm border transition-all duration-300 ${
+      isPlayingThisVerse 
+        ? (isDarkMode ? "border-blue-500/50 bg-blue-900/20" : "border-blue-300 shadow-blue-100/50 bg-blue-50/90") 
+        : (isDarkMode ? "bg-slate-800/90 border-slate-700 hover:bg-slate-800" : "bg-white/90 border-stone-200 hover:shadow-md hover:bg-white")
     }`}>
       <div className="flex justify-between items-start mb-6">
-        <span className="bg-stone-100 text-stone-500 px-3 py-1 rounded-full text-sm font-bold tracking-wide uppercase">
+        <span className={`px-3 py-1 rounded-full text-sm font-bold tracking-wide uppercase ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-200 text-stone-600'}`}>
           Verse {v.num}
         </span>
         
@@ -617,8 +659,8 @@ function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVe
           onClick={() => isPlayingThisVerse ? stopVerseAudio() : playVerse(v.ttsText, v.num)}
           className={`p-3 rounded-full transition-all flex items-center gap-2 ${
             isPlayingThisVerse 
-              ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 hover:bg-blue-700" 
-              : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+              ? (isDarkMode ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40 hover:bg-blue-500" : "bg-blue-600 text-white shadow-md shadow-blue-600/30 hover:bg-blue-700") 
+              : (isDarkMode ? "bg-slate-700 text-blue-400 hover:bg-slate-600" : "bg-blue-50 text-blue-600 hover:bg-blue-100")
           }`}
           title="Play verse audio"
         >
@@ -632,21 +674,21 @@ function VerseItem({ v, playingVerseNum, highlightedWordIndex, playVerse, stopVe
       <div 
         ref={containerRef}
         onClick={handleTextClick}
-        className="text-4xl md:text-5xl text-right font-serif mb-8 text-stone-900 break-words leading-loose" 
+        className={`text-4xl md:text-5xl text-right font-serif mb-8 break-words leading-loose ${isDarkMode ? 'text-slate-100' : 'text-stone-900'}`} 
         style={{ lineHeight: '1.9' }}
         dir="rtl"
         dangerouslySetInnerHTML={{ __html: v.wrappedHe }}
       />
       
       {showTranslit && (
-        <div className="mb-6 text-xl md:text-2xl font-medium text-blue-900/80 leading-relaxed tracking-wide">
+        <div className={`mb-6 text-xl md:text-2xl font-medium leading-relaxed tracking-wide ${isDarkMode ? 'text-blue-300/80' : 'text-blue-900/80'}`}>
           {v.transliteration}
         </div>
       )}
       
-      <div className="pt-6 border-t border-stone-100">
+      <div className={`pt-6 border-t ${isDarkMode ? 'border-slate-700' : 'border-stone-200'}`}>
         <div 
-          className="text-lg md:text-xl leading-relaxed text-stone-600 font-medium"
+          className={`text-lg md:text-xl leading-relaxed font-medium ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}
           dangerouslySetInnerHTML={{ __html: v.en }}
         />
       </div>
